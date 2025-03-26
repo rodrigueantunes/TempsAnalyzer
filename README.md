@@ -23,38 +23,6 @@
 - 🔄 **Bouton de réinitialisation des VFs disponibles**
 - 📈 **Affichage total du temps travaillé (jours + heures) en haut à droite de l’application**
 
----
-
-## 📁 Structure du Projet
-
-TempsAnalyzer/
-│
-├── Models/
-│   ├── SaisieEntry.cs           # Modèle principal des données
-│   ├── ClientFiltreItem.cs      # Classe pour filtrage client
-│   ├── ActiviteFiltreItem.cs    # Classe pour filtrage type
-│   └── VFFiltreItem.cs          # Classe pour filtrage VF
-│
-├── Services/
-│   └── ExcelService.cs          # Lecture du fichier Excel
-│
-├── Helpers/
-│   └── PdfExporter.cs           # Génération de PDF avec QuestPDF
-│
-├── ViewModels/
-│   └── MainViewModel.cs         # Logique principale + filtrage
-│
-├── Views/
-│   └── MainWindow.xaml          # Interface graphique principale
-│
-├── Resources/
-│   └── logo-defaults.png        # Logos par défaut (optionnels)
-│
-├── App.xaml / App.xaml.cs       # Fichier d’entrée
-└── TempsAnalyzer.csproj         # Fichier de projet
-
----
-
 ## 🔧 Installation et Lancement
 
 ### Prérequis
