@@ -1,14 +1,14 @@
-﻿// Models/ActiviteFiltreItem.cs
-using System.ComponentModel;
+﻿using System.ComponentModel;
 
 namespace TempsAnalyzer.Models
 {
-    public class ActiviteFiltreItem : INotifyPropertyChanged
+    public class RessourceFiltreItem : INotifyPropertyChanged
     {
-        public string Code { get; set; }
+        public string Initiales { get; set; }
         public string Libelle { get; set; }
+        public string Service { get; set; }
 
-        private bool _isChecked;
+        private bool _isChecked = true;
         public bool IsChecked
         {
             get => _isChecked;
@@ -21,7 +21,6 @@ namespace TempsAnalyzer.Models
                 }
             }
         }
-
         public event PropertyChangedEventHandler PropertyChanged;
     }
 }

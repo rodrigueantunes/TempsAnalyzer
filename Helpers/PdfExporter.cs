@@ -6,12 +6,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using TempsAnalyzer.Models;
 using Microsoft.Win32;
-using System.Windows.Media;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
+using TempsAnalyzer.Models;
+using TempsAnalyzer.Views;
+
+// Alias pour éviter le conflit ScottPlot.Colors / QuestPDF.Helpers.Colors
+using QColors = QuestPDF.Helpers.Colors;
 
 namespace TempsAnalyzer.Helpers
 {
@@ -20,253 +21,515 @@ namespace TempsAnalyzer.Helpers
         public static string LogoClientPath { get; set; }
         public static string LogoEntreprisePath { get; set; }
 
+        // Taille des polices du tableau
+        private const float HeaderFontSize = 7f;
+        private const float CellFontSize = 6f;
+
+        #region Logos
+
         public static void ChargerLogoClient()
         {
-            OpenFileDialog dialog = new OpenFileDialog
+            var dialog = new OpenFileDialog
             {
                 Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff;*.ico;*.webp"
             };
-
             if (dialog.ShowDialog() == true)
                 LogoClientPath = dialog.FileName;
+        }
+
+        public static void ChargerLogoEntreprise()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff;*.ico;*.webp"
+            };
+            if (dialog.ShowDialog() == true)
+                LogoEntreprisePath = dialog.FileName;
         }
 
         private static byte[] LoadLogoFromResources()
         {
             try
             {
-                // Accès à la ressource directement sous forme de tableau d'octets
-                var logo = Properties.Resources.volume_software;
-
-                // Retourne le tableau d'octets (si c'est déjà un tableau de bytes)
-                return logo;
+                return Properties.Resources.volume_software;
             }
             catch (Exception ex)
             {
-                // Journalisation de l'erreur
                 System.Diagnostics.Debug.WriteLine($"Erreur de chargement du logo : {ex.Message}");
                 return null;
             }
         }
 
+        private static readonly byte[] _logoEntrepriseBytes = LoadLogoFromResources();
 
-        // Chargement de l'image de ressource
-        private static byte[] _logoEntrepriseBytes = LoadLogoFromResources();
+        #endregion
 
+        #region Public API
 
-        public static void ChargerLogoEntreprise()
-        {
-            OpenFileDialog dialog = new OpenFileDialog
-            {
-                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff;*.ico;*.webp"
-            };
-
-            if (dialog.ShowDialog() == true)
-                LogoEntreprisePath = dialog.FileName;
-        }
-
-        public static void GenererPdf(List<SaisieEntry> saisies, bool inclureGraphiques, bool inclureTableaux)
+        // Nouvelle signature (multiRessource)
+        public static void GenererPdf(
+            List<SaisieEntry> saisies,
+            bool inclureGraphiques,
+            bool inclureTableaux,
+            TypeRegroupement typeRegroupement = TypeRegroupement.Semaine,
+            bool multiRessource = false)
         {
             var clientsUniques = saisies.Select(s => s.NomClient).Distinct().ToList();
             bool afficherColonneClient = clientsUniques.Count > 1;
             string clientTitre = afficherColonneClient ? "" : $" {clientsUniques.First()}";
 
-            var groupesParSemaine = saisies
-                .GroupBy(s => CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(s.Date, CalendarWeekRule.FirstDay, DayOfWeek.Monday))
-                .OrderBy(g => g.Key);
+            string typePeriode = ObtentirNomPeriodeMinuscule(typeRegroupement);
+            var nomFichierDefaut = $"Rapport{char.ToUpper(typePeriode[0])}{typePeriode.Substring(1)}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+
+            var saveDialog = new SaveFileDialog
+            {
+                Filter = "Fichiers PDF|*.pdf",
+                Title = "Enregistrer le rapport PDF",
+                FileName = nomFichierDefaut
+            };
+
+            if (saveDialog.ShowDialog() != true)
+                return;
+
+            string cheminFichier = saveDialog.FileName;
 
             QuestPDF.Settings.License = LicenseType.Community;
 
             var document = Document.Create(container =>
             {
-                // Page principale stylisée
+                // Page de garde
                 container.Page(page =>
                 {
                     page.Margin(30);
 
-                    // En-tête avec logos
                     page.Header().Row(row =>
                     {
-                        // Logo Client - Utilisation de FitWidth pour préserver les proportions
                         if (!string.IsNullOrEmpty(LogoClientPath))
                             row.ConstantItem(80).Image(LogoClientPath).FitWidth();
                         else
-                            row.ConstantItem(120); // Espace vide si pas de logo
+                            row.ConstantItem(120);
 
-                        row.RelativeItem().AlignCenter().Text($"Rapport Hebdomadaire{clientTitre}")
-                            .FontSize(32).Bold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
+                        row.RelativeItem().AlignCenter().Text($"Rapport {ObtentirNomPeriode(typeRegroupement)}{clientTitre}")
+                           .FontSize(32).Bold().FontColor(QColors.Blue.Medium);
 
-                        // Logo Entreprise - Utilisation de FitWidth pour préserver les proportions
                         if (_logoEntrepriseBytes != null)
                             row.ConstantItem(170).Image(_logoEntrepriseBytes).FitWidth();
                         else
-                            row.ConstantItem(120); // Espace vide si pas de logo
+                            row.ConstantItem(120);
                     });
 
                     page.Content().Column(col =>
                     {
                         col.Item().PaddingVertical(100).AlignCenter().Column(c =>
                         {
-                            c.Item().Text("Rapport d'Analyse des Temps").FontSize(48).Bold().FontColor(QuestPDF.Helpers.Colors.Blue.Darken2);
-                            c.Item().Text($"Généré le {DateTime.Now:dd MMMM yyyy}").FontSize(24).FontColor(QuestPDF.Helpers.Colors.Grey.Darken1);
-                            c.Item().Text("Ce rapport présente l'analyse détaillée du temps travaillé par client et par type d'activité pour chaque semaine.")
-                                .FontSize(16).FontColor(QuestPDF.Helpers.Colors.Grey.Darken2);
+                            c.Item().Text($"Rapport d'Analyse des Temps - {ObtentirNomPeriode(typeRegroupement)}")
+                                   .FontSize(48).Bold().FontColor(QColors.Blue.Darken2);
+                            c.Item().Text($"Généré le {DateTime.Now:dd MMMM yyyy}")
+                                   .FontSize(24).FontColor(QColors.Grey.Darken1);
+                            c.Item().Text($"Ce rapport présente l'analyse détaillée du temps travaillé par client et par type d'activité pour chaque {ObtentirNomPeriodeMinuscule(typeRegroupement)}.")
+                                   .FontSize(16).FontColor(QColors.Grey.Darken2);
                         });
 
-                        // Sauter quelques lignes avant de commencer le rapport détaillé
                         col.Item().PaddingTop(50).Text("Consulter le détail du rapport.");
                     });
                 });
 
-                // Pages de contenu de chaque semaine
-                foreach (var semaineGroupe in groupesParSemaine)
+                // Pages de contenu
+                switch (typeRegroupement)
                 {
-                    container.Page(page =>
-                    {
-                        page.Margin(30);
-
-                        // En-tête avec logos
-                        page.Header().Row(row =>
-                        {
-                            // Vérification du logo client
-                            if (!string.IsNullOrEmpty(LogoClientPath))
-                                row.ConstantItem(80).Image(LogoClientPath).FitArea();
-                            else
-                                row.ConstantItem(120); // Laisser un espace vide si le logo client n'est pas disponible
-
-                            row.RelativeItem().AlignCenter().Text($"Rapport Hebdomadaire{clientTitre} - Semaine {semaineGroupe.Key}")
-                                .FontSize(22).Bold().FontColor(QuestPDF.Helpers.Colors.Blue.Medium);
-
-                            // Vérification du logo entreprise
-                            if (_logoEntrepriseBytes != null)
-                                row.ConstantItem(170).Image(_logoEntrepriseBytes).FitWidth();
-                            else
-                                row.ConstantItem(120); // Espace vide si pas de logo
-                        });
-
-
-                        page.Content().Column(col =>
-                        {
-                            var cumulParVF = semaineGroupe
-                                .GroupBy(s => new { s.VF, s.Libelle, Client = s.NomClient, Designation = s.DesignationVF })
-                                .Select(g => new VFResume
-                                {
-                                    Client = g.Key.Client,
-                                    VF = g.Key.VF,
-                                    Libelle = g.Key.Libelle,
-                                    DesignationVF = g.Key.Designation,
-                                    TempsTotalJours = Math.Round(g.Sum(s => s.Temps), 2),
-                                    TempsTotalHeures = Math.Round(g.Sum(s => s.Temps) * 8, 2)
-                                })
-                                .OrderBy(x => x.VF).ThenBy(x => x.Client).ToList();
-
-                            if (inclureTableaux)
-                            {
-                                col.Item().Table(table =>
-                                {
-                                    table.ColumnsDefinition(columns =>
-                                    {
-                                        if (afficherColonneClient)
-                                            columns.RelativeColumn(2);  
-                                        columns.RelativeColumn(1);
-                                        columns.RelativeColumn(3);  
-                                        columns.RelativeColumn(2);   
-                                        columns.RelativeColumn(1);
-                                        columns.RelativeColumn(1);
-                                    });
-
-                                    table.Header(header =>
-                                    {
-                                        if (afficherColonneClient)
-                                            header.Cell().Element(CellStyle).Text("Client");
-                                        header.Cell().Element(CellStyle).Text("VF");
-                                        header.Cell().Element(CellStyle).Text("Désignation VF");
-                                        header.Cell().Element(CellStyle).Text("Type");
-                                        header.Cell().Element(CellStyle).Text("Jours");
-                                        header.Cell().Element(CellStyle).Text("hh:mm");
-
-                                        static IContainer CellStyle(IContainer c)
-                                            => c.DefaultTextStyle(x => x.Bold())
-                                                .Background(QuestPDF.Helpers.Colors.Grey.Lighten2).Padding(5);
-                                    });
-
-                                    foreach (var vf in cumulParVF)
-                                    {
-                                        var heures = (int)Math.Floor(vf.TempsTotalHeures);
-                                        var minutes = (int)Math.Round((vf.TempsTotalHeures - heures) * 60);
-                                        string tempsFormatte = $"{heures}h{minutes:D2}";
-
-                                        if (afficherColonneClient)
-                                            table.Cell().Element(CellContent).Text(vf.Client);
-                                        table.Cell().Element(CellContent).Text(vf.VF);
-                                        table.Cell().Element(CellContent).Text(vf.DesignationVF);
-                                        table.Cell().Element(CellContent).Text(vf.Libelle);
-                                        table.Cell().Element(CellContent).Text($"{vf.TempsTotalJours:0.##}");
-                                        table.Cell().Element(CellContent).Text(tempsFormatte);
-
-                                        static IContainer CellContent(IContainer c) => c.Padding(4);
-                                    }
-                                });
-                            }
-
-                            if (inclureGraphiques)
-                            {
-                                // Graphique en Jours
-                                col.Item().PaddingTop(20).Element(container =>
-                                {
-                                    var plt = new Plot();
-                                    double[] valeurs = cumulParVF.Select(x => x.TempsTotalJours).ToArray();
-                                    string[] labels = cumulParVF.Select(x => x.VF).ToArray();
-
-                                    var bar = plt.Add.Bars(valeurs);
-                                    bar.Label = "Temps (jours)";
-                                    plt.Title("Répartition du temps par VF (jours)");
-                                    plt.Axes.Left.Label.Text = "Temps (jours)";
-                                    plt.Axes.Bottom.TickLabelStyle.Rotation = 45;
-                                    plt.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(Enumerable.Range(0, labels.Length).Select(i => (double)i).ToArray(), labels);
-                                    plt.Axes.SetLimitsY(0, valeurs.Max() * 1.2);
-
-                                    var img = plt.GetImage(800, 400);
-                                    container.Image(img.GetImageBytes());
-                                });
-
-                                // Graphique en Heures
-                                col.Item().PaddingTop(20).Element(container =>
-                                {
-                                    var pltHeures = new Plot();
-                                    double[] valeursHeures = cumulParVF.Select(x => x.TempsTotalHeures).ToArray();
-                                    string[] labelsHeures = cumulParVF.Select(x => x.VF).ToArray();
-
-                                    var barHeures = pltHeures.Add.Bars(valeursHeures);
-                                    barHeures.Label = "Temps (heures)";
-                                    pltHeures.Title("Répartition du temps par VF (heures)");
-                                    pltHeures.Axes.Left.Label.Text = "Temps (heures)";
-                                    pltHeures.Axes.Bottom.TickLabelStyle.Rotation = 45;
-                                    pltHeures.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(Enumerable.Range(0, labelsHeures.Length).Select(i => (double)i).ToArray(), labelsHeures);
-                                    pltHeures.Axes.SetLimitsY(0, valeursHeures.Max() * 1.2);
-
-                                    var imgHeures = pltHeures.GetImage(800, 400);
-                                    container.Image(imgHeures.GetImageBytes());
-                                });
-                            }
-                        });
-
-                        page.Footer().AlignCenter()
-                            .Text("Rapport Temps by Antunes")
-                            .FontSize(10).FontColor(QuestPDF.Helpers.Colors.Grey.Darken1);
-                    });
+                    case TypeRegroupement.Semaine:
+                        GenererPagesSemaine(container, saisies, inclureGraphiques, inclureTableaux, afficherColonneClient, clientTitre, multiRessource);
+                        break;
+                    case TypeRegroupement.Mois:
+                        GenererPagesMois(container, saisies, inclureGraphiques, inclureTableaux, afficherColonneClient, clientTitre, multiRessource);
+                        break;
+                    default:
+                        GenererPagesAnnee(container, saisies, inclureGraphiques, inclureTableaux, afficherColonneClient, clientTitre, multiRessource);
+                        break;
                 }
             });
 
-            var nomFichier = $"RapportHebdo_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
-            document.GeneratePdf(nomFichier);
+            document.GeneratePdf(cheminFichier);
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = nomFichier,
+                FileName = cheminFichier,
                 UseShellExecute = true
             });
         }
+
+        // Ancienne signature (compatibilité)
+        public static void GenererPdf(
+            List<SaisieEntry> saisies,
+            bool inclureGraphiques,
+            bool inclureTableaux,
+            TypeRegroupement typeRegroupement)
+            => GenererPdf(saisies, inclureGraphiques, inclureTableaux, typeRegroupement, false);
+
+        #endregion
+
+        #region Pages par période
+
+        private static void GenererPagesSemaine(IDocumentContainer container, List<SaisieEntry> saisies,
+            bool inclureGraphiques, bool inclureTableaux, bool afficherColonneClient, string clientTitre, bool multiRessource)
+        {
+            var groupesSemaine = saisies
+                .GroupBy(s => CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(s.Date, CalendarWeekRule.FirstDay, DayOfWeek.Monday))
+                .OrderBy(g => g.Key);
+
+            foreach (var groupe in groupesSemaine)
+            {
+                AjouterPageContenuGeneric(container, groupe, $"Semaine {groupe.Key}", afficherColonneClient,
+                    clientTitre, TypeRegroupement.Semaine, inclureTableaux, inclureGraphiques, multiRessource);
+            }
+        }
+
+        private static void GenererPagesMois(IDocumentContainer container, List<SaisieEntry> saisies,
+            bool inclureGraphiques, bool inclureTableaux, bool afficherColonneClient, string clientTitre, bool multiRessource)
+        {
+            var groupesMois = saisies
+                .GroupBy(s => new { s.Date.Year, s.Date.Month })
+                .OrderBy(g => g.Key.Year)
+                .ThenBy(g => g.Key.Month);
+
+            foreach (var groupe in groupesMois)
+            {
+                var dateExemple = new DateTime(groupe.Key.Year, groupe.Key.Month, 1);
+                string titrePeriode = $"{dateExemple:MMMM yyyy}";
+                AjouterPageContenuGeneric(container, groupe, titrePeriode, afficherColonneClient,
+                    clientTitre, TypeRegroupement.Mois, inclureTableaux, inclureGraphiques, multiRessource);
+            }
+        }
+
+        private static void GenererPagesAnnee(IDocumentContainer container, List<SaisieEntry> saisies,
+            bool inclureGraphiques, bool inclureTableaux, bool afficherColonneClient, string clientTitre, bool multiRessource)
+        {
+            var groupesAnnee = saisies
+                .GroupBy(s => s.Date.Year)
+                .OrderBy(g => g.Key);
+
+            foreach (var groupe in groupesAnnee)
+            {
+                string titrePeriode = $"Année {groupe.Key}";
+                AjouterPageContenuGeneric(container, groupe, titrePeriode, afficherColonneClient,
+                    clientTitre, TypeRegroupement.Annee, inclureTableaux, inclureGraphiques, multiRessource);
+            }
+        }
+
+        #endregion
+
+        #region Page générique
+
+        private static void AjouterPageContenuGeneric<T, TKey>(
+            IDocumentContainer container,
+            IGrouping<TKey, T> groupe,
+            string titrePeriode,
+            bool afficherColonneClient,
+            string clientTitre,
+            TypeRegroupement typeRegroupement,
+            bool inclureTableaux,
+            bool inclureGraphiques,
+            bool multiRessource)
+            where T : SaisieEntry
+        {
+            container.Page(page =>
+            {
+                page.Margin(30);
+
+                page.Header().Row(row =>
+                {
+                    if (!string.IsNullOrEmpty(LogoClientPath))
+                        row.ConstantItem(80).Image(LogoClientPath).FitArea();
+                    else
+                        row.ConstantItem(120);
+
+                    row.RelativeItem().AlignCenter().Text($"Rapport {ObtentirNomPeriode(typeRegroupement)}{clientTitre} - {titrePeriode}")
+                        .FontSize(22).Bold().FontColor(QColors.Blue.Medium);
+
+                    if (_logoEntrepriseBytes != null)
+                        row.ConstantItem(170).Image(_logoEntrepriseBytes).FitWidth();
+                    else
+                        row.ConstantItem(120);
+                });
+
+                page.Content().Column(col =>
+                {
+                    if (inclureTableaux)
+                    {
+                        if (multiRessource)
+                            AjouterTableauMulti(col, groupe, afficherColonneClient);
+                        else
+                            AjouterTableauMono(col, groupe, afficherColonneClient);
+                    }
+
+                    if (inclureGraphiques)
+                        AjouterGraphiques(col, groupe);
+                });
+
+                page.Footer().AlignCenter()
+                    .Text("Rapport Temps by Antunes")
+                    .FontSize(10).FontColor(QColors.Grey.Darken1);
+            });
+        }
+
+        #endregion
+
+        #region Tableaux
+
+        private static void AjouterTableauMono<T, TKey>(ColumnDescriptor col, IGrouping<TKey, T> groupe, bool afficherColonneClient)
+    where T : SaisieEntry
+        {
+            // Cumul par (Date + VF + Désignation + Type + Client)
+            var lignes = groupe
+                .Select(s => new
+                {
+                    Date = s.Date.Date,
+                    Client = s.NomClient,
+                    VF = s.VF,
+                    DesignationVF = s.DesignationVF,
+                    Type = s.Libelle,
+                    Jours = s.Temps
+                })
+                .GroupBy(x => new { x.Date, x.Client, x.VF, x.DesignationVF, x.Type })
+                .Select(g => new
+                {
+                    g.Key.Date,
+                    g.Key.Client,
+                    g.Key.VF,
+                    g.Key.DesignationVF,
+                    g.Key.Type,
+                    Jours = Math.Round(g.Sum(x => x.Jours), 2),
+                    Heures = Math.Round(g.Sum(x => x.Jours) * 8, 2)
+                })
+                .OrderBy(x => x.Date)
+                .ThenBy(x => x.VF)
+                .ThenBy(x => x.Type)
+                .ToList();
+
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(1);   // Date
+                    if (afficherColonneClient) columns.RelativeColumn(2); // Client
+                    columns.RelativeColumn(1);   // VF
+                    columns.RelativeColumn(3);   // Désignation VF
+                    columns.RelativeColumn(2);   // Type
+                    columns.RelativeColumn(1);   // Jours
+                    columns.RelativeColumn(1);   // hh:mm
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Element(CellStyle).Text("Date");
+                    if (afficherColonneClient)
+                        header.Cell().Element(CellStyle).Text("Client");
+                    header.Cell().Element(CellStyle).Text("VF");
+                    header.Cell().Element(CellStyle).Text("Désignation VF");
+                    header.Cell().Element(CellStyle).Text("Type");
+                    header.Cell().Element(CellStyle).Text("Jours");
+                    header.Cell().Element(CellStyle).Text("hh:mm");
+                });
+
+                foreach (var l in lignes)
+                {
+                    var h = (int)Math.Floor(l.Heures);
+                    var m = (int)Math.Round((l.Heures - h) * 60);
+                    var hhmm = $"{h}h{m:D2}";
+
+                    table.Cell().Element(CellContent).Text(l.Date.ToString("dd/MM/yyyy"));
+                    if (afficherColonneClient)
+                        table.Cell().Element(CellContent).Text(l.Client);
+                    table.Cell().Element(CellContent).Text(l.VF);
+                    table.Cell().Element(CellContent).Text(l.DesignationVF);
+                    table.Cell().Element(CellContent).Text(l.Type);
+                    table.Cell().Element(CellContent).Text($"{l.Jours:0.##}");
+                    table.Cell().Element(CellContent).Text(hhmm);
+                }
+            });
+        }
+
+
+        private static void AjouterTableauMulti<T, TKey>(ColumnDescriptor col, IGrouping<TKey, T> groupe, bool afficherColonneClient)
+            where T : SaisieEntry
+        {
+            // CUMUL : par (Date, Ressource, Service, VF, DesignationVF, Type)
+            var lignes = groupe
+                .Select(s => new
+                {
+                    Date = s.Date.Date,
+                    Ressource = string.IsNullOrWhiteSpace(s.Ressource)
+                                    ? (string.IsNullOrWhiteSpace(s.Initiales) ? "?" : s.Initiales)
+                                    : s.Ressource,
+                    Service = string.IsNullOrWhiteSpace(s.Service) ? "Inconnu" : s.Service,
+                    Client = s.NomClient,
+                    VF = s.VF,
+                    DesignationVF = s.DesignationVF,
+                    Type = s.Libelle,
+                    Jours = s.Temps
+                })
+                .GroupBy(x => new { x.Date, x.Ressource, x.Service, x.Client, x.VF, x.DesignationVF, x.Type })
+                .Select(g => new
+                {
+                    g.Key.Date,
+                    g.Key.Ressource,
+                    g.Key.Service,
+                    g.Key.Client,
+                    g.Key.VF,
+                    g.Key.DesignationVF,
+                    g.Key.Type,
+                    Jours = Math.Round(g.Sum(x => x.Jours), 2),
+                    Heures = Math.Round(g.Sum(x => x.Jours) * 8, 2)
+                })
+                .OrderBy(x => x.Date)
+                .ThenBy(x => x.Ressource)
+                .ThenBy(x => x.VF)
+                .ThenBy(x => x.Type)
+                .ToList();
+
+            col.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(1); // Date
+                    columns.RelativeColumn(2); // Ressource
+                    columns.RelativeColumn(1); // Service
+                    if (afficherColonneClient)
+                        columns.RelativeColumn(2); // Client
+                    columns.RelativeColumn(1); // VF
+                    columns.RelativeColumn(3); // Désignation VF
+                    columns.RelativeColumn(2); // Type
+                    columns.RelativeColumn(1); // Jours
+                    columns.RelativeColumn(1); // hh:mm
+                });
+
+                table.Header(header =>
+                {
+                    header.Cell().Element(CellStyle).Text("Date");
+                    header.Cell().Element(CellStyle).Text("Ressource");
+                    header.Cell().Element(CellStyle).Text("Service");
+                    if (afficherColonneClient)
+                        header.Cell().Element(CellStyle).Text("Client");
+                    header.Cell().Element(CellStyle).Text("VF");
+                    header.Cell().Element(CellStyle).Text("Désignation VF");
+                    header.Cell().Element(CellStyle).Text("Type");
+                    header.Cell().Element(CellStyle).Text("Jours");
+                    header.Cell().Element(CellStyle).Text("hh:mm");
+                });
+
+                foreach (var l in lignes)
+                {
+                    var h = (int)Math.Floor(l.Heures);
+                    var m = (int)Math.Round((l.Heures - h) * 60);
+                    var hhmm = $"{h}h{m:D2}";
+
+                    table.Cell().Element(CellContent).Text(l.Date.ToString("dd/MM/yyyy"));
+                    table.Cell().Element(CellContent).Text(l.Ressource);
+                    table.Cell().Element(CellContent).Text(l.Service);
+                    if (afficherColonneClient)
+                        table.Cell().Element(CellContent).Text(l.Client);
+                    table.Cell().Element(CellContent).Text(l.VF);
+                    table.Cell().Element(CellContent).Text(l.DesignationVF);
+                    table.Cell().Element(CellContent).Text(l.Type);
+                    table.Cell().Element(CellContent).Text($"{l.Jours:0.##}");
+                    table.Cell().Element(CellContent).Text(hhmm);
+                }
+            });
+        }
+
+        // Styles réutilisables
+        private static IContainer CellStyle(IContainer c) =>
+            c.DefaultTextStyle(t => t.Bold().FontSize(HeaderFontSize))
+             .Background(QColors.Grey.Lighten2)
+             .Padding(4);
+
+        private static IContainer CellContent(IContainer c) =>
+            c.DefaultTextStyle(t => t.FontSize(CellFontSize))
+             .Padding(3);
+
+        #endregion
+
+        #region Graphiques
+
+        private static void AjouterGraphiques<T, TKey>(ColumnDescriptor col, IGrouping<TKey, T> groupe)
+            where T : SaisieEntry
+        {
+            // cumul par VF uniquement
+            var cumulPourGraph = groupe
+                .GroupBy(s => s.VF)
+                .Select(g => new
+                {
+                    VF = g.Key,
+                    Jours = Math.Round(g.Sum(x => x.Temps), 2),
+                    Heures = Math.Round(g.Sum(x => x.Temps) * 8, 2)
+                })
+                .OrderBy(x => x.VF)
+                .ToList();
+
+            if (cumulPourGraph.Count == 0) return;
+
+            // Graphique Jours
+            col.Item().PaddingTop(20).Element(container =>
+            {
+                var plt = new Plot();
+                double[] valeurs = cumulPourGraph.Select(x => x.Jours).ToArray();
+                string[] labels = cumulPourGraph.Select(x => x.VF).ToArray();
+
+                var bar = plt.Add.Bars(valeurs);
+                bar.Label = "Temps (jours)";
+                plt.Title("Répartition du temps par VF (jours)");
+                plt.Axes.Left.Label.Text = "Temps (jours)";
+                plt.Axes.Bottom.TickLabelStyle.Rotation = 45;
+                plt.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(
+                    Enumerable.Range(0, labels.Length).Select(i => (double)i).ToArray(), labels);
+                if (valeurs.Length > 0)
+                    plt.Axes.SetLimitsY(0, valeurs.Max() * 1.2);
+
+                var img = plt.GetImage(800, 400);
+                container.Image(img.GetImageBytes());
+            });
+
+            // Graphique Heures
+            col.Item().PaddingTop(20).Element(container =>
+            {
+                var pltH = new Plot();
+                double[] valeursH = cumulPourGraph.Select(x => x.Heures).ToArray();
+                string[] labelsH = cumulPourGraph.Select(x => x.VF).ToArray();
+
+                var barH = pltH.Add.Bars(valeursH);
+                barH.Label = "Temps (heures)";
+                pltH.Title("Répartition du temps par VF (heures)");
+                pltH.Axes.Left.Label.Text = "Temps (heures)";
+                pltH.Axes.Bottom.TickLabelStyle.Rotation = 45;
+                pltH.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericManual(
+                    Enumerable.Range(0, labelsH.Length).Select(i => (double)i).ToArray(), labelsH);
+                if (valeursH.Length > 0)
+                    pltH.Axes.SetLimitsY(0, valeursH.Max() * 1.2);
+
+                var imgH = pltH.GetImage(800, 400);
+                container.Image(imgH.GetImageBytes());
+            });
+        }
+
+        #endregion
+
+        #region Utils
+
+        private static string ObtentirNomPeriode(TypeRegroupement typeRegroupement) =>
+            typeRegroupement switch
+            {
+                TypeRegroupement.Mois => "Mensuel",
+                TypeRegroupement.Annee => "Annuel",
+                _ => "Hebdomadaire"
+            };
+
+        private static string ObtentirNomPeriodeMinuscule(TypeRegroupement typeRegroupement) =>
+            typeRegroupement switch
+            {
+                TypeRegroupement.Mois => "mois",
+                TypeRegroupement.Annee => "année",
+                _ => "semaine"
+            };
 
         private class VFResume
         {
@@ -277,5 +540,7 @@ namespace TempsAnalyzer.Helpers
             public double TempsTotalJours { get; set; }
             public double TempsTotalHeures { get; set; }
         }
+
+        #endregion
     }
 }

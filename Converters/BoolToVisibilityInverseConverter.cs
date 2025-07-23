@@ -5,17 +5,11 @@ using System.Windows.Data;
 
 namespace TempsAnalyzer.Converters
 {
-    public class BooleanToVisibilityConverter : IValueConverter
+    public class BoolToVisibilityInverseConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            bool visible = value is bool b && b;
-            return visible ? Visibility.Visible : Visibility.Collapsed;
-        }
-
+            => (value is bool b && b) ? Visibility.Collapsed : Visibility.Visible;
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
-
-       
     }
 }

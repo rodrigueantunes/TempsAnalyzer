@@ -44,7 +44,14 @@ namespace TempsAnalyzer.Models
             }
         }
 
+        public string Initiales { get; set; } 
+        public string Ressource { get; set; }
+        public string Service { get; set; }
+
+        public string RessourceOuInitiales => !string.IsNullOrWhiteSpace(Ressource) ? Ressource : Initiales;
+
     }
+
 
 }
 

@@ -6,6 +6,8 @@
              StartupUri="Views/MainWindow.xaml">
     <Application.Resources>
         <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+        <converters:BoolToGreenConverter x:Key="BoolToGreenConverter" />
+        <converters:BoolToVisibilityInverseConverter x:Key="BoolToVisibilityInverseConverter" />
         <converters:BooleanMultiVisibilityConverter x:Key="BooleanMultiVisibilityConverter" />
         <converters:ClientCheckboxConverter x:Key="ClientCheckboxConverter" />
         <converters:DateColumnVisibilityConverter x:Key="DateColumnVisibilityConverter" />

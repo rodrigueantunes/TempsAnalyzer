@@ -1,0 +1,95 @@
+﻿<Window x:Class="TempsAnalyzer.Views.FenetreAssociationInitiales"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="Associer Initiales / Ressources / Services"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Height="700" Width="500"
+        Background="#FAFAFA"
+        FontFamily="Segoe UI">
+    <Border Background="White" CornerRadius="14" Padding="20" BorderBrush="#1976D2" BorderThickness="2" Margin="10">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Association initiales → ressources → service"
+                       FontWeight="Bold"
+                       Foreground="#1976D2"
+                       FontSize="17"
+                       Margin="0,0,0,16"
+                       Grid.Row="0"/>
+
+            <DataGrid x:Name="Grid"
+                      AutoGenerateColumns="False"
+                      ItemsSource="{Binding MappingList}"
+                      CanUserAddRows="True"
+                      CanUserDeleteRows="True"
+                      HeadersVisibility="Column"
+                      FontSize="15"
+                      GridLinesVisibility="None"
+                      RowBackground="#F4F9FF"
+                      AlternatingRowBackground="#E3EDFB"
+                      Margin="0,0,0,20"
+                      BorderThickness="0"
+                      SelectionUnit="FullRow"
+                      MinHeight="320"
+                      Grid.Row="1">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Initiales" Binding="{Binding Initiales, Mode=TwoWay}" Width="*" />
+                    <DataGridTextColumn Header="Ressource" Binding="{Binding Libelle, Mode=TwoWay}" Width="*" />
+                    <DataGridComboBoxColumn Header="Service"
+                                            SelectedItemBinding="{Binding Service, Mode=TwoWay}" Width="*">
+                        <DataGridComboBoxColumn.ItemsSource>
+                            <x:Array Type="{x:Type sys:String}">
+                                <sys:String>Chef de projet</sys:String>
+                                <sys:String>Développement</sys:String>
+                                <sys:String>Support</sys:String>
+                            </x:Array>
+                        </DataGridComboBoxColumn.ItemsSource>
+                    </DataGridComboBoxColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <StackPanel Orientation="Horizontal"
+                        Grid.Row="2"
+                        HorizontalAlignment="Right"
+                        Margin="0,15,0,0">
+                <Button Content="Annuler"
+                        FontWeight="Bold"
+                        FontSize="15"
+                        Width="120"
+                        Height="40"
+                        Background="White"
+                        Foreground="#1976D2"
+                        BorderBrush="#1976D2"
+                        BorderThickness="2"
+                        Margin="0,0,14,0"
+                        Cursor="Hand"
+                        Click="Annuler_Click">
+                    <Button.Effect>
+                        <DropShadowEffect ShadowDepth="2" BlurRadius="7" Opacity="0.2"/>
+                    </Button.Effect>
+                </Button>
+                <Button Content="Valider"
+                        FontWeight="Bold"
+                        FontSize="15"
+                        Width="120"
+                        Height="40"
+                        Background="#1976D2"
+                        Foreground="White"
+                        BorderBrush="#1976D2"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        Click="Valider_Click">
+                    <Button.Effect>
+                        <DropShadowEffect ShadowDepth="2" BlurRadius="7" Opacity="0.2"/>
+                    </Button.Effect>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
