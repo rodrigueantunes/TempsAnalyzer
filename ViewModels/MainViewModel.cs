@@ -90,6 +90,7 @@ namespace TempsAnalyzer.ViewModels
 
 
 
+        public ICommand OpenWorkDaySettingsCommand { get; }
 
 
         // Ajouter les propriétés pour les totaux
@@ -112,7 +113,7 @@ namespace TempsAnalyzer.ViewModels
         {
             // Calculer les totaux
             TotalJours = Saisies.Sum(s => s.Temps);
-            TotalHeures = TotalJours * 8; // 1 jour = 8 heures
+            TotalHeures = Saisies.Sum(s => s.Temps * WorkDaySettingsService.Instance.GetHoursPerDay(s.RessourceOuInitiales));
         }
 
         private ObservableCollection<SaisieEntry> _saisiesInitiales;
@@ -219,11 +220,25 @@ namespace TempsAnalyzer.ViewModels
             ActualiserVFsCommand = new RelayCommand(ActualiserVFs);
             ToggleMultiRessourceCommand = new RelayCommand(ToggleMultiRessource);
             AssocierInitialesCommand = new RelayCommand(OuvrirFenetreAssociationInitiales);
+            OpenWorkDaySettingsCommand = new RelayCommand(OpenWorkDaySettings);
         }
 
         private Dictionary<string, string> _initialesToRessource = new();
 
         private List<MappingInitialeItem> _mappingInitiales = new List<MappingInitialeItem>();
+
+        private void OpenWorkDaySettings()
+        {
+            var win = new TempsAnalyzer.Views.WorkDaySettingsView
+            {
+                DataContext = new TempsAnalyzer.ViewModels.WorkDaySettingsViewModel(),
+                Owner = Application.Current.MainWindow
+            };
+            win.ShowDialog();
+            UpdateTotaux();
+        }
+
+
 
         private void ChargerMappingInitiales()
         {

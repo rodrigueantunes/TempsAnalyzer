@@ -16,6 +16,9 @@
     <Compile Update="Views\ProgressDialog.xaml.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Update="Views\WorkDaySettingsView.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Update="Properties\Resources.resx">
@@ -33,6 +36,9 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Update="Views\ProgressDialog.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="Views\WorkDaySettingsView.xaml">
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>

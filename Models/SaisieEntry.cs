@@ -1,4 +1,6 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
+using TempsAnalyzer.Services;
 
 namespace TempsAnalyzer.Models
 {
@@ -13,27 +15,20 @@ namespace TempsAnalyzer.Models
         public double Temps { get; set; }
         public string DesignationVF { get; set; }
 
+        public string Initiales { get; set; }
+        public string Ressource { get; set; }
+        public string Service { get; set; }
 
-        public string TempsHeures
-        {
-            get
-            {
-                var heures = Temps * 8;
-                int h = (int)heures;
-                int min = (int)((heures - h) * 60);
-                return $"{h}h {min}min";
-            }
-        }
-        public string TempsAffichage
-        {
-            get
-            {
-                var heures = Temps * 8;
-                int h = (int)heures;
-                int min = (int)((heures - h) * 60);
-                return $"{Math.Round(Temps, 2)} jour(s) / {h}h {min}min";
-            }
-        }
+        public string RessourceOuInitiales => !string.IsNullOrWhiteSpace(Ressource) ? Ressource : Initiales;
+
+        private double HoursPerDay => WorkDaySettingsService.Instance.GetHoursPerDay(RessourceOuInitiales);
+
+        public double TempsHeuresDouble => Temps * HoursPerDay;
+
+        public string TempsHeures => FormatHeures(TempsHeuresDouble);
+
+        public string TempsAffichage => $"{Math.Round(Temps, 2)} jour(s) / {FormatHeures(TempsHeuresDouble)}";
+
         public string SemaineAffichage
         {
             get
@@ -44,14 +39,11 @@ namespace TempsAnalyzer.Models
             }
         }
 
-        public string Initiales { get; set; } 
-        public string Ressource { get; set; }
-        public string Service { get; set; }
-
-        public string RessourceOuInitiales => !string.IsNullOrWhiteSpace(Ressource) ? Ressource : Initiales;
-
+        private static string FormatHeures(double heures)
+        {
+            int h = (int)heures;
+            int min = (int)Math.Round((heures - h) * 60);
+            return $"{h}h {min}min";
+        }
     }
-
-
 }
-
